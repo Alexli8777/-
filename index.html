@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel檔案處理系統</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Excel檔案處理系統</h1>
+        <div class="upload-section">
+            <div class="upload-box">
+                <h3>📄 來源檔案</h3>
+                <input type="file" id="sourceFile" class="file-input" accept=".xlsx,.xls">
+                <label for="sourceFile" class="file-label">選擇來源檔案</label>
+                <div id="sourceInfo" class="file-info" style="display: none;"></div>
+            </div>
+            <div class="upload-box">
+                <h3>🎯 目標檔案</h3>
+                <input type="file" id="targetFile" class="file-input" accept=".xlsx,.xls">
+                <label for="targetFile" class="file-label">選擇目標檔案</label>
+                <div id="targetInfo" class="file-info" style="display: none;"></div>
+            </div>
+        </div>
+        <button id="processBtn" class="process-btn" disabled>🚀 開始處理檔案</button>
+        <div id="status" class="status" style="display: none;"></div>
+        <div id="downloadSection" class="download-section" style="display: none;"></div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,175 @@
+let sourceData = null;
+let targetData = null;
+let sourceFileName = '';
+let targetFileName = '';
+
+const sourceFileInput = document.getElementById('sourceFile');
+const targetFileInput = document.getElementById('targetFile');
+const processBtn = document.getElementById('processBtn');
+const status = document.getElementById('status');
+const downloadSection = document.getElementById('downloadSection');
+
+function showStatus(message, type = 'processing') {
+    status.textContent = message;
+    status.className = `status ${type}`;
+    status.style.display = 'block';
+}
+
+function hideStatus() {
+    status.style.display = 'none';
+}
+
+function checkFilesReady() {
+    if (sourceData && targetData) {
+        processBtn.disabled = false;
+        processBtn.textContent = '🚀 開始處理檔案';
+    } else {
+        processBtn.disabled = true;
+        processBtn.textContent = '請先選擇檔案';
+    }
+}
+
+function getColumnValue(row, colIndex) {
+    return row[colIndex] || '';
+}
+
+function readExcelFile(file, callback) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = e.target.result;
+            const workbook = XLSX.read(data, {type: 'binary'});
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, raw: false});
+            callback(jsonData, null);
+        } catch (error) {
+            callback(null, `讀取檔案失敗: ${error.message}`);
+        }
+    };
+    reader.readAsBinaryString(file);
+}
+
+sourceFileInput.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        sourceFileName = file.name;
+        showStatus('正在讀取來源檔案...', 'processing');
+        readExcelFile(file, function(data, error) {
+            if (error) {
+                showStatus(error, 'error');
+                sourceData = null;
+            } else {
+                sourceData = data;
+                document.getElementById('sourceInfo').innerHTML = `<strong>✅ ${file.name}</strong><br>共 ${data.length} 行資料`;
+                document.getElementById('sourceInfo').style.display = 'block';
+                showStatus('來源檔案讀取成功！', 'success');
+                setTimeout(hideStatus, 2000);
+            }
+            checkFilesReady();
+        });
+    }
+});
+
+targetFileInput.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        targetFileName = file.name;
+        showStatus('正在讀取目標檔案...', 'processing');
+        readExcelFile(file, function(data, error) {
+            if (error) {
+                showStatus(error, 'error');
+                targetData = null;
+            } else {
+                targetData = data;
+                document.getElementById('targetInfo').innerHTML = `<strong>✅ ${file.name}</strong><br>共 ${data.length} 行資料`;
+                document.getElementById('targetInfo').style.display = 'block';
+                showStatus('目標檔案讀取成功！', 'success');
+                setTimeout(hideStatus, 2000);
+            }
+            checkFilesReady();
+        });
+    }
+});
+
+function processFiles() {
+    if (!sourceData || !targetData) {
+        showStatus('請先選擇兩個檔案', 'error');
+        return;
+    }
+
+    showStatus('正在處理檔案資料...', 'processing');
+
+    try {
+        const negativeData = {};
+
+        for (let i = 5; i < sourceData.length; i++) {
+            const row = sourceData[i];
+            if (!row || row.length === 0) continue;
+
+            let aValue = getColumnValue(row, 0).toString();
+            const ivrCode = aValue.substring(0, 7);
+
+            const qRaw = getColumnValue(row, 16).toString().replace(/,/g, '').trim();
+            const qNumber = parseFloat(qRaw);
+
+            if (!isNaN(qNumber) && qNumber < 0 && ivrCode) {
+                negativeData[ivrCode] = qNumber;
+            }
+        }
+
+        const resultData = targetData.map(row => [...row]);
+        let matchCount = 0;
+
+        for (let i = 0; i < resultData.length; i++) {
+            const row = resultData[i];
+            if (!row || row.length === 0) continue;
+
+            let targetIvrCode = getColumnValue(row, 0).toString();
+            const cleanIvrCode = targetIvrCode.substring(0, 7);
+
+            if (cleanIvrCode && negativeData.hasOwnProperty(cleanIvrCode)) {
+                while (row.length <= 4) {
+                    row.push('');
+                }
+                row[4] = negativeData[cleanIvrCode];
+                matchCount++;
+            }
+        }
+
+        const newWorkbook = XLSX.utils.book_new();
+        const newWorksheet = XLSX.utils.aoa_to_sheet(resultData);
+        XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, 'ProcessedData');
+
+        const wbout = XLSX.write(newWorkbook, {bookType: 'xlsx', type: 'binary'});
+        const blob = new Blob([s2ab(wbout)], {type: 'application/octet-stream'});
+        const url = URL.createObjectURL(blob);
+
+        const downloadLink = document.createElement('a');
+        downloadLink.href = url;
+        downloadLink.download = `processed_${targetFileName}`;
+        downloadLink.className = 'download-btn';
+        downloadLink.textContent = `下載處理結果 (已匹配 ${matchCount} 筆資料)`;
+
+        downloadSection.innerHTML = `<h3>✅ 處理完成！</h3><p>成功處理檔案，共匹配 <strong>${matchCount}</strong> 筆負數資料</p><p>找到 <strong>${Object.keys(negativeData).length}</strong> 筆來源負數資料</p>`;
+        downloadSection.appendChild(downloadLink);
+        downloadSection.style.display = 'block';
+
+        showStatus(`處理完成！共匹配 ${matchCount} 筆資料`, 'success');
+
+    } catch (error) {
+        console.error('處理錯誤:', error);
+        showStatus(`處理失敗: ${error.message}`, 'error');
+    }
+}
+
+function s2ab(s) {
+    const buf = new ArrayBuffer(s.length);
+    const view = new Uint8Array(buf);
+    for (let i = 0; i < s.length; i++) {
+        view[i] = s.charCodeAt(i) & 0xFF;
+    }
+    return buf;
+}
+
+processBtn.addEventListener('click', processFiles);
